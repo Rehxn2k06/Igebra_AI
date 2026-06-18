@@ -1,0 +1,260 @@
+# Multimodal RAG Chatbot — Implementation Plan
+
+## Overview
+
+A production-quality multimodal chatbot with:
+- **Text + Image** input support
+- **RAG** (Retrieval-Augmented Generation) over uploaded documents
+- **Tool-calling** (web search, calculator, weather, generative UI)
+- Deployed free on **Vercel** using the **Vercel AI SDK** + **Groq API**
+
+Targeting the **Ed-Tech domain** (AI tutor / study assistant) as a differentiator.
+
+---
+
+## Free-Tier Stack (Zero Cost)
+
+| Layer | Technology | Why Free |
+|---|---|---|
+| Framework | **Next.js 14 (App Router)** | Open source |
+| AI SDK | **Vercel AI SDK v4** | Open source |
+| LLM | **Groq API** (llama-3.2-11b-vision for multimodal, llama-3.3-70b for RAG) | Free tier: 30 req/min |
+| Embeddings | **Groq `nomic-embed-text`** OR HuggingFace Inference API | Free |
+| Vector Store | **In-memory (Vercel Edge compatible)** + optional **Upstash Vector** | Upstash free tier: 10k vectors |
+| File Storage | **Vercel Blob** | Free tier: 1GB |
+| UI | **Tailwind CSS** + **shadcn/ui** | Open source |
+| Deployment | **Vercel** (Hobby plan) | Free |
+| GitHub | Public repo | Free |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Next.js App                         │
+│                                                         │
+│  ┌──────────┐     ┌──────────┐     ┌────────────────┐  │
+│  │  Chat UI │────▶│ API Route│────▶│  Vercel AI SDK │  │
+│  │(multimod)│     │/api/chat │     │  streamText()  │  │
+│  └──────────┘     └────┬─────┘     └───────┬────────┘  │
+│                        │                   │           │
+│                   ┌────▼────┐         ┌────▼────┐      │
+│                   │  RAG    │         │  Groq   │      │
+│                   │Pipeline │         │  API    │      │
+│                   └────┬────┘         └─────────┘      │
+│                        │                               │
+│              ┌─────────┼──────────┐                    │
+│              ▼         ▼          ▼                    │
+│         Embeddings  VectorDB  Tool Calls               │
+│        (nomic/HF) (Upstash)  (search/calc)             │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Feature Breakdown
+
+### 1. Multimodal Input (Text + Image)
+- Users can type messages or paste/upload images
+- Images are base64-encoded and sent to Groq's **llama-3.2-11b-vision** model
+- Image analysis results are also used as context for RAG retrieval
+
+### 2. RAG Pipeline
+- **Document Upload**: PDF, TXT, DOCX files via drag-and-drop
+- **Chunking**: Text split into 512-token chunks with 50-token overlap
+- **Embedding**: Via Groq `nomic-embed-text` (or HuggingFace free API as fallback)
+- **Vector Store**: Upstash Vector (free tier) or in-memory Map for demo
+- **Retrieval**: Top-k cosine similarity search, injected into system prompt
+- **Context Window**: Retrieved chunks formatted as `<context>` block prepended to user message
+
+### 3. Tool Calling
+| Tool | Description | API |
+|---|---|---|
+| `web_search` | Search the web for current info | DuckDuckGo (no key needed) |
+| `calculate` | Math expression evaluator | Built-in (mathjs) |
+| `get_weather` | Current weather | Open-Meteo (free, no key) |
+| `generate_quiz` | Generate a quiz from topic (Ed-Tech) | Pure LLM tool |
+| `explain_image` | Deep-analyze an uploaded image | Groq Vision |
+
+### 4. Generative UI
+- Tool calls render **streamed React components** (not just text)
+- Quiz renders as an interactive card with answer checking
+- Weather renders as a visual weather widget
+- Math shows step-by-step solution in a formatted card
+
+---
+
+## File Structure
+
+```
+Igebra_AI/
+├── app/
+│   ├── layout.tsx              # Root layout, fonts, metadata
+│   ├── page.tsx                # Home page → redirects to /chat
+│   ├── chat/
+│   │   └── page.tsx            # Main chat interface
+│   └── api/
+│       ├── chat/
+│       │   └── route.ts        # Core chat API (streaming, RAG, tools)
+│       └── ingest/
+│           └── route.ts        # Document upload & embedding
+├── components/
+│   ├── chat/
+│   │   ├── ChatInterface.tsx   # Main chat shell
+│   │   ├── MessageList.tsx     # Message history renderer
+│   │   ├── MessageBubble.tsx   # Individual message (text+image)
+│   │   ├── InputBar.tsx        # Text + image attachment input
+│   │   └── TypingIndicator.tsx
+│   ├── tools/                  # Generative UI components
+│   │   ├── WeatherCard.tsx
+│   │   ├── QuizCard.tsx
+│   │   ├── MathSolver.tsx
+│   │   └── SearchResults.tsx
+│   ├── rag/
+│   │   ├── DocumentUpload.tsx  # Drag-and-drop uploader
+│   │   └── KnowledgeBase.tsx   # Shows ingested docs
+│   └── ui/                     # shadcn/ui primitives
+├── lib/
+│   ├── ai/
+│   │   ├── groq.ts             # Groq client setup
+│   │   ├── tools.ts            # Tool definitions (Vercel AI SDK format)
+│   │   └── prompts.ts          # System prompts
+│   ├── rag/
+│   │   ├── embeddings.ts       # Embedding generation
+│   │   ├── vectorstore.ts      # Upstash Vector / in-memory store
+│   │   ├── chunker.ts          # Text chunking logic
+│   │   └── retriever.ts        # Similarity search + context injection
+│   └── utils/
+│       ├── file-parser.ts      # PDF/TXT/DOCX parsing
+│       └── image-utils.ts      # Base64 helpers
+├── public/
+│   └── demo-docs/              # Sample knowledge base files
+├── .env.local                  # (not committed) API keys
+├── .env.example                # Template for keys
+├── README.md                   # Setup + demo guide
+├── next.config.ts
+├── tailwind.config.ts
+└── package.json
+```
+
+---
+
+## Key Implementation Details
+
+### Chat API Route (`/api/chat`)
+```typescript
+// Pseudocode
+1. Parse incoming messages (text + optional image)
+2. If RAG is enabled: embed the user query → retrieve top-k chunks
+3. Build system prompt with retrieved context
+4. Call Groq via Vercel AI SDK streamText() with:
+   - model: groq('llama-3.2-11b-vision-preview') for images
+   - model: groq('llama-3.3-70b-versatile') for text+RAG
+   - tools: { web_search, calculate, get_weather, generate_quiz }
+   - maxSteps: 5 (multi-step tool use)
+5. Stream response back to client
+```
+
+### RAG Retrieval Flow
+```
+User Query → Embed (nomic-embed-text) → Vector Search (cosine)
+           → Top 3 Chunks → Inject into System Prompt
+           → LLM generates response grounded in retrieved context
+```
+
+### Image Handling
+- Small images (< 1MB): Base64 inline with message
+- Large images: Uploaded to Vercel Blob → URL passed to vision model
+
+---
+
+## UI Design
+
+**Theme**: Dark glassmorphism — deep navy/slate with purple/teal accents  
+**Inspiration**: Modern AI chat apps (Claude, Perplexity)  
+
+Key UI elements:
+- Sidebar: Knowledge base documents + conversation history  
+- Main: Chat messages with markdown rendering + code highlighting  
+- Input bar: Textarea + image clip button + send button  
+- Tool results: Animated expanding cards inline in chat  
+- RAG indicator: Shows source chunks used for each answer  
+
+---
+
+## Deployment Plan
+
+1. Push to **public GitHub repo** (with `.env.example`, no secrets)
+2. Connect repo to **Vercel** (free Hobby plan)
+3. Add environment variables in Vercel dashboard:
+   - `GROQ_API_KEY` (from console.groq.com — free)
+   - `UPSTASH_VECTOR_REST_URL` (optional, Upstash free tier)
+   - `UPSTASH_VECTOR_REST_TOKEN` (optional)
+4. `vercel deploy` → live URL
+
+---
+
+## Environment Variables Needed
+
+```bash
+# Required
+GROQ_API_KEY=gsk_...          # Free at console.groq.com
+
+# Optional (for persistent vector store)
+UPSTASH_VECTOR_REST_URL=...   # Free at upstash.com
+UPSTASH_VECTOR_REST_TOKEN=...
+
+# Optional (for large image storage)
+BLOB_READ_WRITE_TOKEN=...      # Vercel Blob (free tier)
+```
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Q1 — Ed-Tech Domain Scope**: Should the chatbot be a general AI tutor (any subject), or would you prefer a more focused use case like:
+> - A study assistant that answers questions from uploaded textbooks/notes (RAG-heavy)
+> - A coding tutor (code execution + explanation)
+> - A general-purpose multimodal assistant?
+
+> [!IMPORTANT]
+> **Q2 — Pre-loaded Knowledge Base**: Should I include a sample knowledge base (e.g. a few PDF chapters on a topic) to demonstrate RAG out-of-the-box, or should it be upload-only?
+
+> [!IMPORTANT]
+> **Q3 — GitHub Account**: Will you create the GitHub repo yourself and push the code, or do you want me to set up git and initialize the repo locally? (Deployment to Vercel requires a GitHub connection.)
+
+> [!NOTE]
+> **Q4 — Upstash**: Upstash Vector (free tier) requires account creation. If you'd prefer zero account signups beyond Groq + Vercel, I can use **in-memory vector store** (resets on cold start — fine for a demo). Which do you prefer?
+
+---
+
+## Verification Plan
+
+### Automated
+- `npm run build` must pass with zero errors before deploy
+- TypeScript strict mode enabled
+
+### Manual Demo Checklist
+- [ ] Send a text message → LLM responds
+- [ ] Upload an image → Vision model describes/analyzes it
+- [ ] Upload a PDF → Ask a question from its content → RAG retrieves correct context
+- [ ] Ask "what's the weather in Mumbai?" → Weather tool fires + renders card
+- [ ] Ask "quiz me on photosynthesis" → Quiz card renders with interactive MCQs
+- [ ] Ask a math question → Step-by-step solution card renders
+- [ ] Verify Vercel URL is publicly accessible
+
+---
+
+## Timeline Estimate
+
+| Phase | Work | Est. Time |
+|---|---|---|
+| 1 | Project scaffold + UI shell | 1–2 hrs |
+| 2 | Groq integration + streaming chat | 1 hr |
+| 3 | Multimodal (image) support | 1 hr |
+| 4 | RAG pipeline (embed + retrieve) | 2 hrs |
+| 5 | Tool definitions + generative UI | 2 hrs |
+| 6 | Polish, README, deploy | 1 hr |
+| **Total** | | **~8 hrs** |
