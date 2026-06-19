@@ -114,10 +114,24 @@ export async function POST(req: NextRequest) {
     // vision model only when an image is present.
     const model = hasImage ? groq(VISION_MODEL) : groq(CHAT_MODEL);
 
+    // Groq requires `content` to be a string on every message.
+    // The AI SDK / chat history may store content as an array of parts
+    // (e.g. [{type:"text",text:"..."}]) from prior tool interactions.
+    // Flatten those to plain strings so Groq doesn't 400.
+    const sanitizedMessages = prunedMessages.map((m: any) => {
+      if (Array.isArray(m.content)) {
+        const hasOnlyText = m.content.every((p: any) => p.type === "text");
+        if (hasOnlyText) {
+          return { ...m, content: m.content.map((p: any) => p.text).join("\n") };
+        }
+      }
+      return m;
+    });
+
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: prunedMessages,
+      messages: sanitizedMessages,
       tools: allTools,
       stopWhen: stepCountIs(2),
       temperature: 0.4,
