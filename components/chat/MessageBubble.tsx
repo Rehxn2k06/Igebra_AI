@@ -16,6 +16,7 @@ import SearchCard from "../tools/SearchCard";
 
 interface Props {
   message: UIMessage;
+  showCitations?: boolean;
 }
 
 function ToolErrorCard({ toolName, errorText }: { toolName: string; errorText: string }) {
@@ -33,7 +34,7 @@ const preprocessMarkdown = (text: string) => {
   return text.replace(/\r\n/g, "\n").replace(/(?<!\n)\n(?!\n)/g, "  \n");
 };
 
-export default function MessageBubble({ message }: Props) {
+export default function MessageBubble({ message, showCitations = true }: Props) {
   const isUser = message.role === "user";
 
   const renderParts = () => {
@@ -137,6 +138,7 @@ export default function MessageBubble({ message }: Props) {
                   <SearchCard
                     key={i}
                     result={part.output as ComponentProps<typeof SearchCard>["result"]}
+                    showCitations={showCitations}
                   />
                 );
               default:

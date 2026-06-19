@@ -7,13 +7,14 @@ import TypingIndicator from "./TypingIndicator";
 interface Props {
   messages: UIMessage[];
   isLoading: boolean;
+  showCitations?: boolean;
 }
 
-export default function MessageList({ messages, isLoading }: Props) {
+export default function MessageList({ messages, isLoading, showCitations = true }: Props) {
   return (
     <>
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
+        <MessageBubble key={msg.id} message={msg} showCitations={showCitations} />
       ))}
       {isLoading && (
         <div className="message-row fade-in">

@@ -16,6 +16,7 @@ export default function ChatInterface() {
   const shouldAutoScrollRef = useRef(true);
   const [ragActive, setRagActive] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [showCitations, setShowCitations] = useState(true);
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
@@ -47,29 +48,29 @@ export default function ChatInterface() {
       if (!inputText.trim() && images.length === 0) return;
 
       const text = inputText;
-      
+
       // Convert images to base64 Data URLs so they can be sent to the API
       const files = images.length > 0
         ? await Promise.all(
-            images.map(
-              (f) =>
-                new Promise<{ type: "file"; mediaType: string; filename: string; url: string }>(
-                  (resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      resolve({
-                        type: "file",
-                        mediaType: f.type,
-                        filename: f.name,
-                        url: event.target?.result as string,
-                      });
-                    };
-                    reader.onerror = (err) => reject(err);
-                    reader.readAsDataURL(f);
-                  }
-                )
-            )
+          images.map(
+            (f) =>
+              new Promise<{ type: "file"; mediaType: string; filename: string; url: string }>(
+                (resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    resolve({
+                      type: "file",
+                      mediaType: f.type,
+                      filename: f.name,
+                      url: event.target?.result as string,
+                    });
+                  };
+                  reader.onerror = (err) => reject(err);
+                  reader.readAsDataURL(f);
+                }
+              )
           )
+        )
         : undefined;
 
       setInputText("");
@@ -97,7 +98,8 @@ export default function ChatInterface() {
   }, []);
 
   return (
-    <div className="bg-animated" aria-hidden="true">
+    <>
+      <div className="bg-animated" aria-hidden="true" />
       <div className="app-shell">
         {/* Sidebar */}
         <aside className="sidebar" role="complementary" aria-label="Knowledge base and settings">
@@ -219,7 +221,7 @@ export default function ChatInterface() {
               onScroll={handleMessagesScroll}
             >
               <div className="messages-column">
-                <MessageList messages={messages} isLoading={isLoading} />
+                <MessageList messages={messages} isLoading={isLoading} showCitations={showCitations} />
                 <div ref={messagesEndRef} />
               </div>
             </div>
@@ -233,9 +235,11 @@ export default function ChatInterface() {
             onSubmit={handleSubmit}
             isLoading={isLoading}
             textareaRef={inputRef}
+            showCitations={showCitations}
+            setShowCitations={setShowCitations}
           />
         </main>
       </div>
-    </div>
+    </>
   );
 }

@@ -10,6 +10,8 @@ interface Props {
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  showCitations: boolean;
+  setShowCitations: (v: boolean) => void;
 }
 
 export default function InputBar({
@@ -20,6 +22,8 @@ export default function InputBar({
   onSubmit,
   isLoading,
   textareaRef,
+  showCitations,
+  setShowCitations,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imagePasteRef = useRef<HTMLInputElement>(null);
@@ -99,7 +103,7 @@ export default function InputBar({
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Ask anything... (Shift+Enter for new line, paste images directly)"
+            placeholder="Ask anything... (Multimodal input supported)"
             rows={1}
             aria-label="Chat message input"
             disabled={isLoading}
@@ -116,7 +120,7 @@ export default function InputBar({
                 title="Attach image (or paste from clipboard)"
                 aria-label="Attach image"
               >
-                📷
+                📎
               </button>
               <input
                 ref={fileInputRef}
@@ -132,11 +136,25 @@ export default function InputBar({
               />
               <input ref={imagePasteRef} type="file" className="sr-only" aria-hidden="true" />
 
-              <span style={{ fontSize: 11, color: "var(--text-muted)", paddingLeft: 4 }}>
-                {images.length > 0
-                  ? `${images.length} image${images.length > 1 ? "s" : ""} attached`
-                  : "Tip: paste an image directly"}
-              </span>
+              {/* Source Citation toggle */}
+              <label
+                className="citation-toggle"
+                title="Toggle source citations in responses"
+                aria-label="Toggle source citation"
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}
+              >
+                <label className="switch" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={showCitations}
+                    onChange={(e) => setShowCitations(e.target.checked)}
+                  />
+                  <span className="slider"></span>
+                </label>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>
+                  Source Citation
+                </span>
+              </label>
             </div>
 
             <button
@@ -155,3 +173,4 @@ export default function InputBar({
     </div>
   );
 }
+

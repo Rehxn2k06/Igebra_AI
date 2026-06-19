@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     // RAG retrieval
     let ragPromptAddition = "";
     const hasKnowledgeBase = getTotalChunks() > 0;
-    
+
     if (hasKnowledgeBase && textQuery) {
       const context = retrieve(textQuery);
       ragPromptAddition = buildRagPrompt(context);
@@ -124,12 +124,13 @@ export async function POST(req: NextRequest) {
       onError: (err: unknown) => {
         const e = err as { error?: unknown };
         const inner = (e?.error ?? err) as Record<string, unknown>;
+        const innerErr = inner as unknown as Error;
         console.error("[streamText error]", {
-          name: (inner as Error)?.name,
-          message: (inner as Error)?.message,
+          name: innerErr?.name,
+          message: innerErr?.message,
           status: inner?.status,
           responseBody: inner?.responseBody,
-          cause: (inner as Error)?.cause,
+          cause: innerErr?.cause,
         });
       },
     });

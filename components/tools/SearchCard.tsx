@@ -6,8 +6,14 @@ interface SearchResult {
   error?: string;
 }
 
-export default function SearchCard({ result }: { result: SearchResult }) {
-  if (result.error || !result.result) {
+export default function SearchCard({
+  result,
+  showCitations = true,
+}: {
+  result: SearchResult;
+  showCitations?: boolean;
+}) {
+  if (result.error || !result.result || !showCitations) {
     return null; // Let the LLM handle it in text
   }
 
