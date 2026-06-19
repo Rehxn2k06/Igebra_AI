@@ -14,3 +14,4 @@ export const FAST_GEN_MODEL = "llama-3.1-8b-instant";
 
 // Vision model for image understanding.
 export const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+
