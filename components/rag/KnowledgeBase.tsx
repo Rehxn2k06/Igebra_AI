@@ -89,7 +89,7 @@ export default function KnowledgeBase({ onRagUpdate }: Props) {
       >
         <div className="drop-zone-icon">{uploading ? "⏳" : "📄"}</div>
         <div className="drop-zone-text">
-          {uploading ? "Processing..." : "Drop PDF, TXT, or MD"}
+          {uploading ? "Processing..." : "Drop TXT, or MD"}
         </div>
         <div className="drop-zone-hint">or click to browse</div>
         <input
