@@ -32,9 +32,10 @@ export async function POST(req: NextRequest) {
       if (file.name.endsWith(".pdf")) {
         // Dynamic import to avoid issues with edge runtime
         const pdfParseModule = await import("pdf-parse");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-        const parsed = await pdfParse(buffer);
+        const PDFParseClass = pdfParseModule.PDFParse;
+        const parser = new PDFParseClass({ data: buffer });
+        const parsed = await parser.getText();
+        await parser.destroy();
         text = parsed.text;
       } else if (
         file.name.endsWith(".txt") ||
