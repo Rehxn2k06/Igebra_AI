@@ -123,13 +123,14 @@ export async function POST(req: NextRequest) {
       temperature: 0.4,
       onError: (err: unknown) => {
         const e = err as { error?: unknown };
-        const inner = (e?.error ?? err) as Record<string, unknown>;
-        const innerErr = inner as unknown as Error;
+        const inner = (e?.error ?? err) as unknown;
+        const innerErr = inner as Error;
         console.error("[streamText error]", {
           name: innerErr?.name,
           message: innerErr?.message,
-          status: inner?.status,
-          responseBody: inner?.responseBody,
+          // @ts-ignore - custom error fields
+          status: (inner as any)?.status,
+          responseBody: (inner as any)?.responseBody,
           cause: innerErr?.cause,
         });
       },
