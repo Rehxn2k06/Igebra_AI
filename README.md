@@ -1,4 +1,4 @@
-# 🧠 Igebra AI — Multimodal RAG Chatbot
+#  Igebra AI — Multimodal RAG Chatbot
 
 > An intelligent Ed-Tech study assistant with multimodal input (text + images), Retrieval-Augmented Generation (RAG), and interactive tool-calling capabilities.
 
@@ -8,23 +8,23 @@
 
 ---
 
-## ✨ Features
+##  Features
 
 | Feature | Details |
 |---|---|
-| 💬 **Multimodal Chat** | Ask questions with text AND images (paste or upload) |
-| 📚 **RAG Pipeline** | Upload your notes/PDFs → get personalized, grounded answers |
-| 🖼️ **Vision AI** | Analyzes diagrams, equations, graphs using Llama 4 Scout |
-| 🌐 **Web Search** | Real-time DuckDuckGo search (no API key needed) |
-| 🧮 **Calculator** | Evaluates math expressions with natural syntax |
-| 🌤️ **Weather** | Live weather via Open-Meteo (free, no API key) |
-| 📝 **Quiz Generator** | Interactive MCQ quizzes with explanations and scoring |
-| ⚡ **Streaming** | Real-time streaming responses via Vercel AI SDK v6 |
-| 🎨 **Generative UI** | Tool results rendered as rich React components |
+|  **Multimodal Chat** | Ask questions with text AND images (paste or upload) |
+|  **RAG Pipeline** | Upload your notes/PDFs → get personalized, grounded answers |
+|  **Vision AI** | Analyzes diagrams, equations, graphs using Llama 4 Scout |
+|  **Web Search** | Real-time DuckDuckGo search (no API key needed) |
+|  **Calculator** | Evaluates math expressions with natural syntax |
+|  **Weather** | Live weather via Open-Meteo (free, no API key) |
+|  **Quiz Generator** | Interactive MCQ quizzes with explanations and scoring |
+|  **Streaming** | Real-time streaming responses via Vercel AI SDK v6 |
+|  **Generative UI** | Tool results rendered as rich React components |
 
 ---
 
-## 🛠️ Tech Stack (100% Free)
+##  Tech Stack (100% Free)
 
 - **Framework**: Next.js 16 (App Router)
 - **AI SDK**: Vercel AI SDK v6
@@ -35,7 +35,7 @@
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Clone the repository
 
@@ -66,6 +66,7 @@ Get your free Groq API key at [console.groq.com](https://console.groq.com).
 ### 4. Run locally
 
 ```bash
+npm run build
 npm run dev
 ```
 
@@ -73,7 +74,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 📋 Demo Guide
+##  Demo Guide
 
 ### Text Chat
 1. Open the chatbot
@@ -94,14 +95,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ### Tool Calling
 | Example Prompt | Tool Used | Output |
 |---|---|---|
-| "What's the weather in Mumbai?" | 🌤️ Weather | Interactive weather card |
-| "Quiz me on photosynthesis" | 📝 Quiz Generator | Interactive MCQ quiz |
-| "Calculate sin(pi/4) + 2^8" | 🧮 Calculator | Instant result card |
-| "Search for latest AI news" | 🌐 Web Search | Search results card |
+| "What's the weather in Mumbai?" |  Weather | Interactive weather card |
+| "Quiz me on photosynthesis" |  Quiz Generator | Interactive MCQ quiz |
+| "Calculate sin(pi/4) + 2^8" |  Calculator | Instant result card |
+| "Search for latest AI news" |  Web Search | Search results card |
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Igebra_AI/
@@ -126,7 +127,7 @@ Igebra_AI/
 
 ---
 
-## 🌐 Deployment (Vercel)
+##  Deployment (Vercel)
 
 1. **Fork/clone** this repository and push to your GitHub
 2. Go to [vercel.com](https://vercel.com) → **New Project** → Import your repo
@@ -138,7 +139,7 @@ Igebra_AI/
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 User Input (Text/Image)
@@ -161,7 +162,7 @@ User Input (Text/Image)
 
 ---
 
-## 📄 License
+##  License
 
 MIT — feel free to use for educational purposes.
 
