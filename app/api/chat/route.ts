@@ -13,6 +13,10 @@ export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json();
 
+    // #region agent log
+    fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'app/api/chat/route.ts:POST-entry',message:'Chat API request received',data:{messageCount:Array.isArray(messages)?messages.length:0,lastUserText:Array.isArray(messages)?(messages.at(-1)?.parts?.find((p:{type?:string})=>p.type==='text') as {text?:string}|undefined)?.text?.slice(0,80):null,hasGroqKey:!!process.env.GROQ_API_KEY},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Invalid messages" }, { status: 400 });
     }
@@ -136,6 +140,12 @@ export async function POST(req: NextRequest) {
       stopWhen: stepCountIs(2),
       temperature: 0.4,
 
+      onStepFinish: ({ stepNumber, toolCalls, toolResults, text, finishReason }) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'app/api/chat/route.ts:onStepFinish',message:'Stream step finished',data:{stepNumber,toolCallNames:toolCalls?.map((t)=>t.toolName),toolResultCount:toolResults?.length,textLength:text?.length??0,finishReason},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+      },
+
       // Groq requires content to be a string on every message role.
       // During multi-step tool use the AI SDK may pass array-format
       // content (e.g. [{type:"text",text:"..."}]) which Groq rejects.
@@ -168,12 +178,26 @@ export async function POST(req: NextRequest) {
           responseBody: (inner as any)?.responseBody,
           cause: innerErr?.cause,
         });
+        // #region agent log
+        fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'app/api/chat/route.ts:streamText-onError',message:'streamText error',data:{name:innerErr?.name,errorMessage:innerErr?.message,status:(inner as {status?:number})?.status,responseBody:(inner as {responseBody?:string})?.responseBody?.slice?.(0,500)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      onError: (error) => {
+        const err = error as Error & { status?: number; responseBody?: string };
+        // #region agent log
+        fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'app/api/chat/route.ts:toUIMessageStreamResponse-onError',message:'UI stream error (masked for client)',data:{name:err?.name,errorMessage:err?.message,status:err?.status,responseBody:err?.responseBody?.slice?.(0,500)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        return "An error occurred.";
+      },
+    });
   } catch (error) {
     console.error("Chat API error:", error);
+    // #region agent log
+    fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'app/api/chat/route.ts:POST-catch',message:'Chat API top-level error',data:{errorMessage:error instanceof Error?error.message:String(error)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

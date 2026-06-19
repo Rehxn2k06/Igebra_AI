@@ -66,7 +66,6 @@ Get your free Groq API key at [console.groq.com](https://console.groq.com).
 ### 4. Run locally
 
 ```bash
-npm run build
 npm run dev
 ```
 

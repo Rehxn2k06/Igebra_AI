@@ -37,6 +37,12 @@ const preprocessMarkdown = (text: string) => {
 export default function MessageBubble({ message, showCitations = true }: Props) {
   const isUser = message.role === "user";
 
+  if (!isUser && message.parts?.length) {
+    // #region agent log
+    fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'MessageBubble.tsx:render',message:'Rendering assistant message',data:{messageId:message.id,partCount:message.parts.length,parts:message.parts.map((p,i)=>({index:i,type:p.type,state:'state' in p?p.state:undefined,hasOutput:'output' in p&&p.output!=null,hasText:'text' in p?!!p.text:false}))},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+  }
+
   const renderParts = () => {
     if (!message.parts || message.parts.length === 0) {
       return null;

@@ -18,8 +18,18 @@ export default function ChatInterface() {
   const [inputText, setInputText] = useState("");
   const [showCitations, setShowCitations] = useState(true);
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, error } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
+    onError: (err) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'ChatInterface.tsx:onError',message:'useChat stream error',data:{errorMessage:err.message},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+    },
+    onFinish: ({ message, isError, finishReason }) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7771/ingest/8f17d160-9262-4cf2-834c-5ea30679cc95',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1c74eb'},body:JSON.stringify({sessionId:'1c74eb',location:'ChatInterface.tsx:onFinish',message:'Assistant message finished',data:{isError,finishReason,partCount:message.parts?.length??0,parts:message.parts?.map((p)=>({type:p.type,state:'state' in p?p.state:undefined,toolName:p.type.startsWith('tool-')?p.type.slice(5):undefined}))},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+    },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
