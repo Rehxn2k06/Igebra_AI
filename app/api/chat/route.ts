@@ -119,8 +119,30 @@ export async function POST(req: NextRequest) {
       system: systemPrompt,
       messages: prunedMessages,
       tools: allTools,
-      stopWhen: stepCountIs(3),
+      stopWhen: stepCountIs(2),
       temperature: 0.4,
+
+      // Groq requires content to be a string on every message role.
+      // During multi-step tool use the AI SDK may pass array-format
+      // content (e.g. [{type:"text",text:"..."}]) which Groq rejects.
+      // Flatten those before each round-trip.
+      prepareStep: ({ messages: stepMsgs }) => ({
+        messages: stepMsgs.map((m: any) => {
+          if (Array.isArray(m.content)) {
+            const hasOnlyText = m.content.every(
+              (p: any) => p.type === "text"
+            );
+            if (hasOnlyText) {
+              return {
+                ...m,
+                content: m.content.map((p: any) => p.text).join("\n"),
+              };
+            }
+          }
+          return m;
+        }),
+      }),
+
       onError: (err: unknown) => {
         const e = err as { error?: unknown };
         const inner = (e?.error ?? err) as unknown;
@@ -128,7 +150,6 @@ export async function POST(req: NextRequest) {
         console.error("[streamText error]", {
           name: innerErr?.name,
           message: innerErr?.message,
-          // @ts-ignore - custom error fields
           status: (inner as any)?.status,
           responseBody: (inner as any)?.responseBody,
           cause: innerErr?.cause,
