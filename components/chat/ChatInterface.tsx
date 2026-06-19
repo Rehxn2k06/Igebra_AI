@@ -11,22 +11,35 @@ import WelcomeScreen from "./WelcomeScreen";
 export default function ChatInterface() {
   const [images, setImages] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const [ragActive, setRagActive] = useState(false);
   const [inputText, setInputText] = useState("");
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom(messages.length <= 1 ? "auto" : "smooth");
+    }
   }, [messages, scrollToBottom]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 120;
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -34,12 +47,34 @@ export default function ChatInterface() {
       if (!inputText.trim() && images.length === 0) return;
 
       const text = inputText;
+      
+      // Convert images to base64 Data URLs so they can be sent to the API
       const files = images.length > 0
-        ? images.map((f) => ({ type: "file" as const, mediaType: f.type, url: URL.createObjectURL(f) }))
+        ? await Promise.all(
+            images.map(
+              (f) =>
+                new Promise<{ type: "file"; mediaType: string; filename: string; url: string }>(
+                  (resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      resolve({
+                        type: "file",
+                        mediaType: f.type,
+                        filename: f.name,
+                        url: event.target?.result as string,
+                      });
+                    };
+                    reader.onerror = (err) => reject(err);
+                    reader.readAsDataURL(f);
+                  }
+                )
+            )
+          )
         : undefined;
 
       setInputText("");
       setImages([]);
+      shouldAutoScrollRef.current = true;
 
       await sendMessage({ text, files });
     },
@@ -49,10 +84,17 @@ export default function ChatInterface() {
   const handleSuggestion = useCallback(
     async (text: string) => {
       setInputText("");
+      shouldAutoScrollRef.current = true;
       await sendMessage({ text });
     },
     [sendMessage]
   );
+
+  const handleStartBlankChat = useCallback(() => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
 
   return (
     <div className="bg-animated" aria-hidden="true">
@@ -70,6 +112,45 @@ export default function ChatInterface() {
           </div>
 
           <div className="sidebar-content">
+            <button
+              onClick={() => {
+                setMessages([]);
+                shouldAutoScrollRef.current = true;
+                setInputText("");
+                setImages([]);
+                handleStartBlankChat();
+              }}
+              className="new-chat-btn"
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-md)",
+                background: "linear-gradient(135deg, var(--accent-primary) 0%, #5c35cc 100%)",
+                border: "none",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 13,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                cursor: "pointer",
+                marginBottom: 16,
+                boxShadow: "0 4px 12px rgba(124, 77, 255, 0.2)",
+                transition: "all 0.2s ease"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(124, 77, 255, 0.35)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = "none";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(124, 77, 255, 0.2)";
+              }}
+            >
+              <span>+</span> New Chat
+            </button>
+
             <p className="sidebar-section-title">Knowledge Base</p>
             <KnowledgeBase onRagUpdate={setRagActive} />
 
@@ -124,11 +205,23 @@ export default function ChatInterface() {
           </header>
 
           {messages.length === 0 ? (
-            <WelcomeScreen onSuggestion={handleSuggestion} />
+            <WelcomeScreen
+              onSuggestion={handleSuggestion}
+              onStartBlankChat={handleStartBlankChat}
+            />
           ) : (
-            <div className="messages-container" role="log" aria-live="polite" aria-label="Chat messages">
-              <MessageList messages={messages} isLoading={isLoading} />
-              <div ref={messagesEndRef} />
+            <div
+              ref={messagesContainerRef}
+              className="messages-container"
+              role="log"
+              aria-live="polite"
+              aria-label="Chat messages"
+              onScroll={handleMessagesScroll}
+            >
+              <div className="messages-column">
+                <MessageList messages={messages} isLoading={isLoading} />
+                <div ref={messagesEndRef} />
+              </div>
             </div>
           )}
 
@@ -139,6 +232,7 @@ export default function ChatInterface() {
             setImages={setImages}
             onSubmit={handleSubmit}
             isLoading={isLoading}
+            textareaRef={inputRef}
           />
         </main>
       </div>

@@ -2,6 +2,7 @@
 
 interface Props {
   onSuggestion: (text: string) => void;
+  onStartBlankChat: () => void;
 }
 
 const suggestions = [
@@ -31,7 +32,7 @@ const suggestions = [
   },
 ];
 
-export default function WelcomeScreen({ onSuggestion }: Props) {
+export default function WelcomeScreen({ onSuggestion, onStartBlankChat }: Props) {
   return (
     <div className="welcome-screen fade-in">
       <div className="welcome-logo" aria-hidden="true">🧠</div>
@@ -56,6 +57,14 @@ export default function WelcomeScreen({ onSuggestion }: Props) {
           </button>
         ))}
       </div>
+
+      <button
+        type="button"
+        className="blank-chat-btn"
+        onClick={onStartBlankChat}
+      >
+        Start with an empty chat
+      </button>
 
       <div style={{ marginTop: 32, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
         <span className="chip chip-purple">📚 Upload notes for RAG</span>

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, convertToModelMessages, pruneMessages } from "ai";
 import { groq, CHAT_MODEL, VISION_MODEL } from "@/lib/ai/groq";
 import { SYSTEM_PROMPT } from "@/lib/ai/prompts";
 import { allTools } from "@/lib/ai/tools";
@@ -17,17 +17,85 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid messages" }, { status: 400 });
     }
 
-    // Check if latest message has an image
-    const lastMessage = messages[messages.length - 1];
-    const hasImage = lastMessage?.content && Array.isArray(lastMessage.content) &&
-      lastMessage.content.some((p: { type: string }) => p.type === "image");
+    // Normalize messages to UI Message format (with parts) if they are in CoreMessage format (with content)
+    const normalizedMessages = messages.map((m: any) => {
+      if (m.parts) return m;
+      if (m.content) {
+        if (typeof m.content === "string") {
+          return {
+            ...m,
+            parts: [{ type: "text", text: m.content }],
+          };
+        } else if (Array.isArray(m.content)) {
+          return {
+            ...m,
+            parts: m.content.map((part: any) => {
+              if (typeof part === "string") return { type: "text", text: part };
+              if (part.type === "text") return { type: "text", text: part.text };
+              if (part.type === "image") {
+                return {
+                  type: "file",
+                  mediaType: part.mimeType || "image/png",
+                  url: part.image,
+                };
+              }
+              return part;
+            }),
+          };
+        }
+      }
+      return {
+        ...m,
+        parts: [{ type: "text", text: "" }],
+      };
+    });
 
-    // Extract text query for RAG
+    // Convert messages to ModelMessage[] format for streamText
+    const convertedMessages = await convertToModelMessages(normalizedMessages);
+
+    // Map file parts to image parts for vision models
+    const processedMessages = convertedMessages.map((msg: any) => {
+      if (Array.isArray(msg.content)) {
+        return {
+          ...msg,
+          content: msg.content.map((part: any) => {
+            if (part.type === "file" && part.mediaType?.startsWith("image/")) {
+              return {
+                type: "image",
+                image: part.data,
+                mimeType: part.mediaType,
+              };
+            }
+            return part;
+          }),
+        };
+      }
+      return msg;
+    });
+
+    const recentMessages =
+      processedMessages.length > 12
+        ? processedMessages.slice(processedMessages.length - 12)
+        : processedMessages;
+
+    const prunedMessages = pruneMessages({
+      messages: recentMessages,
+      toolCalls: "before-last-6-messages",
+      emptyMessages: "remove",
+    });
+
+    // Check if latest message has an image
+    const lastMessage = prunedMessages[prunedMessages.length - 1];
+    let hasImage = false;
     let textQuery = "";
-    if (Array.isArray(lastMessage?.content)) {
-      const textPart = lastMessage.content.find((p: { type: string }) => p.type === "text");
+
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      hasImage = lastMessage.content.some((p: any) => p.type === "image");
+      const textPart = lastMessage.content.find(
+        (p: any) => p.type === "text"
+      ) as { type: "text"; text: string } | undefined;
       textQuery = textPart?.text || "";
-    } else if (typeof lastMessage?.content === "string") {
+    } else if (lastMessage && typeof lastMessage.content === "string") {
       textQuery = lastMessage.content;
     }
 
@@ -42,16 +110,28 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = SYSTEM_PROMPT + ragPromptAddition;
 
-    // Choose model based on whether there's an image
+    // Always use the tool-capable 70B model for text chat;
+    // vision model only when an image is present.
     const model = hasImage ? groq(VISION_MODEL) : groq(CHAT_MODEL);
 
     const result = streamText({
       model,
       system: systemPrompt,
-      messages,
+      messages: prunedMessages,
       tools: allTools,
-      stopWhen: stepCountIs(5),
-      temperature: 0.7,
+      stopWhen: stepCountIs(3),
+      temperature: 0.4,
+      onError: (err: unknown) => {
+        const e = err as { error?: unknown };
+        const inner = (e?.error ?? err) as Record<string, unknown>;
+        console.error("[streamText error]", {
+          name: (inner as Error)?.name,
+          message: (inner as Error)?.message,
+          status: inner?.status,
+          responseBody: inner?.responseBody,
+          cause: (inner as Error)?.cause,
+        });
+      },
     });
 
     return result.toUIMessageStreamResponse();

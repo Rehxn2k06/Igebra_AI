@@ -9,6 +9,7 @@ interface Props {
   setImages: (imgs: File[]) => void;
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
 export default function InputBar({
@@ -18,9 +19,9 @@ export default function InputBar({
   setImages,
   onSubmit,
   isLoading,
+  textareaRef,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imagePasteRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

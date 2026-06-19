@@ -1,8 +1,12 @@
 "use client";
 
-import { type UIMessage } from "ai";
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import type { ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import WeatherCard from "../tools/WeatherCard";
@@ -13,6 +17,21 @@ import SearchCard from "../tools/SearchCard";
 interface Props {
   message: UIMessage;
 }
+
+function ToolErrorCard({ toolName, errorText }: { toolName: string; errorText: string }) {
+  return (
+    <div className="tool-card fade-in">
+      <div className="tool-card-header">{toolName.replace(/_/g, " ")}</div>
+      <div className="tool-card-body">
+        <p style={{ color: "#e57373", fontSize: 14 }}>{errorText}</p>
+      </div>
+    </div>
+  );
+}
+
+const preprocessMarkdown = (text: string) => {
+  return text.replace(/\r\n/g, "\n").replace(/(?<!\n)\n(?!\n)/g, "  \n");
+};
 
 export default function MessageBubble({ message }: Props) {
   const isUser = message.role === "user";
@@ -32,7 +51,8 @@ export default function MessageBubble({ message }: Props) {
           return (
             <ReactMarkdown
               key={i}
-              remarkPlugins={[remarkGfm]}
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
               components={{
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 code({ className, children, ...props }: any) {
@@ -54,7 +74,7 @@ export default function MessageBubble({ message }: Props) {
                 },
               }}
             >
-              {part.text}
+              {preprocessMarkdown(part.text)}
             </ReactMarkdown>
           );
 
@@ -72,28 +92,57 @@ export default function MessageBubble({ message }: Props) {
           }
           return null;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        case "tool-invocation": {
-          // AI SDK v6 uses DynamicToolUIPart - state/toolName/output are on the part directly
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const p = part as any;
-          if (!p || p.state !== "result") return null;
-
-          switch (p.toolName) {
-            case "get_weather":
-              return <WeatherCard key={i} result={p.output} />;
-            case "generate_quiz":
-              return <QuizCard key={i} result={p.output} />;
-            case "calculate":
-              return <MathCard key={i} result={p.output} />;
-            case "web_search":
-              return <SearchCard key={i} result={p.output} />;
-            default:
-              return null;
-          }
-        }
-
         default:
+          if (isToolUIPart(part)) {
+            const toolName = getToolName(part);
+
+            if (part.state === "output-error") {
+              return (
+                <ToolErrorCard
+                  key={i}
+                  toolName={toolName}
+                  errorText={part.errorText}
+                />
+              );
+            }
+
+            if (part.state !== "output-available") {
+              return null;
+            }
+
+            switch (toolName) {
+              case "get_weather":
+                return (
+                  <WeatherCard
+                    key={i}
+                    result={part.output as ComponentProps<typeof WeatherCard>["result"]}
+                  />
+                );
+              case "generate_quiz":
+                return (
+                  <QuizCard
+                    key={i}
+                    result={part.output as ComponentProps<typeof QuizCard>["result"]}
+                  />
+                );
+              case "calculate":
+                return (
+                  <MathCard
+                    key={i}
+                    result={part.output as ComponentProps<typeof MathCard>["result"]}
+                  />
+                );
+              case "web_search":
+                return (
+                  <SearchCard
+                    key={i}
+                    result={part.output as ComponentProps<typeof SearchCard>["result"]}
+                  />
+                );
+              default:
+                return null;
+            }
+          }
           return null;
       }
     });
@@ -104,7 +153,7 @@ export default function MessageBubble({ message }: Props) {
       <div className={`message-avatar ${isUser ? "user" : "ai"}`} aria-hidden="true">
         {isUser ? "👤" : "🧠"}
       </div>
-      <div>
+      <div className="message-content">
         <div className={`message-bubble ${isUser ? "user" : "ai"}`}>
           {renderParts()}
         </div>

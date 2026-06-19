@@ -42,3 +42,7 @@ next-env.d.ts
 
 # temp source staging dir
 /_source
+
+# temp agent chat files
+previous agent chat.txt
+

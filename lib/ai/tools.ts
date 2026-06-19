@@ -1,25 +1,263 @@
+import { generateText, tool } from "ai";
 import { z } from "zod";
+import { groq, FAST_GEN_MODEL } from "./groq";
 
-// In AI SDK v6, tools are defined as plain objects with description, parameters, and execute
-// The `tool()` helper type signature changed — we define them directly.
+type Operator = "+" | "-" | "*" | "/" | "^";
+type Token =
+  | { type: "number"; value: number }
+  | { type: "identifier"; value: string }
+  | { type: "operator"; value: Operator }
+  | { type: "paren"; value: "(" | ")" };
 
-type ToolDef<TParams extends z.ZodType, TResult> = {
-  description: string;
-  parameters: TParams;
-  execute: (params: z.infer<TParams>) => Promise<TResult>;
+const FUNCTIONS: Record<string, (value: number) => number> = {
+  abs: Math.abs,
+  acos: Math.acos,
+  asin: Math.asin,
+  atan: Math.atan,
+  ceil: Math.ceil,
+  cos: Math.cos,
+  exp: Math.exp,
+  floor: Math.floor,
+  log: Math.log,
+  log10: Math.log10,
+  log2: Math.log2,
+  round: Math.round,
+  sin: Math.sin,
+  sqrt: Math.sqrt,
+  tan: Math.tan,
 };
 
-function defineTool<TParams extends z.ZodType, TResult>(
-  def: ToolDef<TParams, TResult>
-) {
-  return def;
+const CONSTANTS: Record<string, number> = {
+  e: Math.E,
+  pi: Math.PI,
+};
+
+const quizQuestionSchema = z.object({
+  question: z.string(),
+  options: z.array(z.string()).length(4),
+  correct: z.number().int().min(0).max(3),
+  explanation: z.string(),
+});
+
+const quizSchema = z.object({
+  title: z.string(),
+  questions: z.array(quizQuestionSchema).min(2).max(8),
+});
+
+class ExpressionParser {
+  private readonly tokens: Token[];
+  private index = 0;
+
+  constructor(expression: string) {
+    this.tokens = tokenizeExpression(expression);
+  }
+
+  parse() {
+    const value = this.parseExpression();
+
+    if (this.index < this.tokens.length) {
+      throw new Error("Unexpected trailing input");
+    }
+
+    return value;
+  }
+
+  private parseExpression(): number {
+    let value = this.parseTerm();
+
+    while (true) {
+      if (this.matchOperator("+")) {
+        value += this.parseTerm();
+      } else if (this.matchOperator("-")) {
+        value -= this.parseTerm();
+      } else {
+        return value;
+      }
+    }
+  }
+
+  private parseTerm(): number {
+    let value = this.parsePower();
+
+    while (true) {
+      if (this.matchOperator("*")) {
+        value *= this.parsePower();
+      } else if (this.matchOperator("/")) {
+        const divisor = this.parsePower();
+        if (divisor === 0) {
+          throw new Error("Division by zero");
+        }
+        value /= divisor;
+      } else {
+        return value;
+      }
+    }
+  }
+
+  private parsePower(): number {
+    const base = this.parseUnary();
+
+    if (this.matchOperator("^")) {
+      return Math.pow(base, this.parsePower());
+    }
+
+    return base;
+  }
+
+  private parseUnary(): number {
+    if (this.matchOperator("+")) return this.parseUnary();
+    if (this.matchOperator("-")) return -this.parseUnary();
+    return this.parsePrimary();
+  }
+
+  private parsePrimary(): number {
+    const token = this.peek();
+
+    if (!token) {
+      throw new Error("Unexpected end of expression");
+    }
+
+    if (token.type === "number") {
+      this.index += 1;
+      return token.value;
+    }
+
+    if (token.type === "identifier") {
+      this.index += 1;
+      const identifier = token.value.toLowerCase();
+
+      if (this.matchParen("(")) {
+        const fn = FUNCTIONS[identifier];
+        if (!fn) {
+          throw new Error(`Unsupported function: ${identifier}`);
+        }
+        const arg = this.parseExpression();
+        this.expectParen(")");
+        return fn(arg);
+      }
+
+      const constant = CONSTANTS[identifier];
+      if (constant === undefined) {
+        throw new Error(`Unsupported identifier: ${identifier}`);
+      }
+      return constant;
+    }
+
+    if (this.matchParen("(")) {
+      const value = this.parseExpression();
+      this.expectParen(")");
+      return value;
+    }
+
+    throw new Error("Unexpected token");
+  }
+
+  private peek() {
+    return this.tokens[this.index];
+  }
+
+  private matchOperator(operator: Operator) {
+    const token = this.peek();
+    if (token?.type === "operator" && token.value === operator) {
+      this.index += 1;
+      return true;
+    }
+    return false;
+  }
+
+  private matchParen(paren: "(" | ")") {
+    const token = this.peek();
+    if (token?.type === "paren" && token.value === paren) {
+      this.index += 1;
+      return true;
+    }
+    return false;
+  }
+
+  private expectParen(paren: ")" | "(") {
+    if (!this.matchParen(paren)) {
+      throw new Error(`Expected ${paren}`);
+    }
+  }
+}
+
+function normalizeExpression(expression: string) {
+  return expression
+    .trim()
+    .replace(/\*\*/g, "^")
+    .replace(/π/g, "pi")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/[–—]/g, "-");
+}
+
+function tokenizeExpression(expression: string): Token[] {
+  const tokens: Token[] = [];
+  const normalized = normalizeExpression(expression);
+  let index = 0;
+
+  while (index < normalized.length) {
+    const char = normalized[index];
+
+    if (/\s/.test(char)) {
+      index += 1;
+      continue;
+    }
+
+    if (/[0-9.]/.test(char)) {
+      let end = index + 1;
+      while (end < normalized.length && /[0-9.]/.test(normalized[end])) {
+        end += 1;
+      }
+      const value = Number(normalized.slice(index, end));
+      if (!Number.isFinite(value)) {
+        throw new Error("Invalid number");
+      }
+      tokens.push({ type: "number", value });
+      index = end;
+      continue;
+    }
+
+    if (/[a-zA-Z_]/.test(char)) {
+      let end = index + 1;
+      while (end < normalized.length && /[a-zA-Z0-9_]/.test(normalized[end])) {
+        end += 1;
+      }
+      tokens.push({
+        type: "identifier",
+        value: normalized.slice(index, end),
+      });
+      index = end;
+      continue;
+    }
+
+    if ("+-*/^".includes(char)) {
+      tokens.push({ type: "operator", value: char as Operator });
+      index += 1;
+      continue;
+    }
+
+    if (char === "(" || char === ")") {
+      tokens.push({ type: "paren", value: char });
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unsupported character: ${char}`);
+  }
+
+  return tokens;
+}
+
+function evaluateExpression(expression: string) {
+  return new ExpressionParser(expression).parse();
 }
 
 // ─── Web Search Tool (DuckDuckGo instant answers) ─────────────────────────────
-export const webSearchTool = defineTool({
+export const webSearchTool = tool({
   description:
     "Search the web for current information, recent events, or topics not in the knowledge base. Use this when the student asks about something that needs up-to-date or external information.",
-  parameters: z.object({
+  inputSchema: z.object({
     query: z.string().describe("The search query to look up"),
   }),
   execute: async ({ query }) => {
@@ -68,10 +306,10 @@ export const webSearchTool = defineTool({
 });
 
 // ─── Calculator Tool ──────────────────────────────────────────────────────────
-export const calculateTool = defineTool({
+export const calculateTool = tool({
   description:
     "Evaluate mathematical expressions, solve equations, and perform calculations. Supports arithmetic, algebra, trigonometry, and basic calculus expressions.",
-  parameters: z.object({
+  inputSchema: z.object({
     expression: z
       .string()
       .describe(
@@ -84,17 +322,7 @@ export const calculateTool = defineTool({
   }),
   execute: async ({ expression, showSteps }) => {
     try {
-      const sanitized = expression
-        .replace(/\^/g, "**")
-        .replace(/π/g, "Math.PI")
-        .replace(/\bpi\b/gi, "Math.PI")
-        .replace(/\be\b/g, "Math.E");
-
-      // eslint-disable-next-line no-new-func
-      const fn = new Function(
-        `const sin=Math.sin,cos=Math.cos,tan=Math.tan,asin=Math.asin,acos=Math.acos,atan=Math.atan,sqrt=Math.sqrt,abs=Math.abs,log=Math.log,log2=Math.log2,log10=Math.log10,exp=Math.exp,floor=Math.floor,ceil=Math.ceil,round=Math.round,pow=Math.pow,PI=Math.PI,E=Math.E,max=Math.max,min=Math.min; return ${sanitized};`
-      );
-      const result = fn();
+      const result = evaluateExpression(expression);
 
       if (typeof result !== "number" || isNaN(result)) {
         return { error: "Could not evaluate expression", expression };
@@ -115,10 +343,10 @@ export const calculateTool = defineTool({
 });
 
 // ─── Weather Tool (Open-Meteo — completely free, no API key) ──────────────────
-export const getWeatherTool = defineTool({
+export const getWeatherTool = tool({
   description:
     "Get current weather conditions for any city or location. Useful for geography or science lessons about weather patterns.",
-  parameters: z.object({
+  inputSchema: z.object({
     location: z.string().describe("City name or location (e.g., 'Mumbai', 'New York')"),
   }),
   execute: async ({ location }) => {
@@ -164,14 +392,21 @@ export const getWeatherTool = defineTool({
 });
 
 // ─── Quiz Generator Tool ──────────────────────────────────────────────────────
-export const generateQuizTool = defineTool({
+export const generateQuizTool = tool({
   description:
-    "Generate an interactive multiple-choice quiz on any educational topic. Use when a student wants to test their knowledge or practice for an exam.",
-  parameters: z.object({
+    "Generate an interactive multiple-choice quiz from a topic or from source material provided by the user. Use when a student wants to test their knowledge or practice for an exam.",
+  inputSchema: z.object({
     topic: z
       .string()
+      .optional()
       .describe(
         "The educational topic for the quiz (e.g., 'Photosynthesis', 'Quadratic Equations', 'Python basics')"
+      ),
+    sourceMaterial: z
+      .string()
+      .optional()
+      .describe(
+        "A passage, notes excerpt, or study material the quiz should be based on"
       ),
     difficulty: z
       .enum(["easy", "medium", "hard"])
@@ -184,13 +419,79 @@ export const generateQuizTool = defineTool({
       .optional()
       .describe("Number of questions (2-8)"),
   }),
-  execute: async ({ topic, difficulty = "medium", numQuestions = 4 }) => {
-    return {
-      topic,
-      difficulty,
-      numQuestions,
-      instruction: `Generate exactly ${numQuestions} multiple-choice quiz questions about "${topic}" at ${difficulty} difficulty. Format your response as valid JSON with this exact structure: {"questions": [{"question": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "correct": 0, "explanation": "..."}]}. The "correct" field is the 0-based index of the correct option.`,
-    };
+  execute: async ({ topic, sourceMaterial, difficulty = "medium", numQuestions = 4 }) => {
+    const cleanTopic = topic?.trim();
+    const cleanSourceMaterial = sourceMaterial?.trim();
+
+    if (!cleanTopic && !cleanSourceMaterial) {
+      return {
+        error: "No quiz topic or source material was provided.",
+      };
+    }
+
+    try {
+      const jsonPrompt = cleanSourceMaterial
+        ? `Create a ${difficulty} multiple-choice quiz with exactly ${numQuestions} questions based only on the study material below.
+
+Study material:
+"""
+${cleanSourceMaterial}
+"""
+
+Each question must have 4 options, exactly one correct answer (0-indexed), and a short explanation.
+
+Respond ONLY with a valid JSON object — no markdown, no extra text:
+{
+  "title": "Quiz title here",
+  "questions": [
+    {
+      "question": "Question text?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct": 0,
+      "explanation": "Why this answer is correct."
+    }
+  ]
+}`
+        : `Create a ${difficulty} multiple-choice quiz with exactly ${numQuestions} questions about "${cleanTopic}".
+
+Each question must have 4 options, exactly one correct answer (0-indexed), and a short explanation.
+
+Respond ONLY with a valid JSON object — no markdown, no extra text:
+{
+  "title": "Quiz title here",
+  "questions": [
+    {
+      "question": "Question text?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct": 0,
+      "explanation": "Why this answer is correct."
+    }
+  ]
+}`;
+
+      const { text } = await generateText({
+        model: groq(FAST_GEN_MODEL),
+        prompt: jsonPrompt,
+        temperature: 0.3,
+      });
+
+      // Extract the JSON block (model might wrap in ```json fences)
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON object in response");
+      const parsed = quizSchema.parse(JSON.parse(jsonMatch[0]));
+
+      return {
+        topic: cleanTopic ?? "Provided material",
+        difficulty,
+        title: parsed.title,
+        questions: parsed.questions,
+      };
+    } catch {
+      return {
+        error: "Could not generate the quiz right now.",
+        topic: cleanTopic ?? "Provided material",
+      };
+    }
   },
 });
 
