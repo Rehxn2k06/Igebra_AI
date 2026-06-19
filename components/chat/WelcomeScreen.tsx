@@ -35,41 +35,48 @@ const suggestions = [
 export default function WelcomeScreen({ onSuggestion, onStartBlankChat }: Props) {
   return (
     <div className="welcome-screen fade-in">
-      <div className="welcome-logo" aria-hidden="true">🧠</div>
-      <h1 className="welcome-title">Igebra AI</h1>
-      <p className="welcome-subtitle">
-        Your intelligent study assistant. Ask questions about math, science,
-        programming, or any subject. Upload your notes for personalized, RAG-powered answers.
-      </p>
+      {/*
+        margin: auto 0 centres this wrapper vertically when there's extra space.
+        When content is taller than the container, it flows from the top and the
+        outer .welcome-screen (overflow-y: auto) lets the user scroll down.
+      */}
+      <div style={{ margin: "auto 0", width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div className="welcome-logo" aria-hidden="true">🧠</div>
+        <h1 className="welcome-title">Igebra AI</h1>
+        <p className="welcome-subtitle">
+          Your intelligent study assistant. Ask questions about math, science,
+          programming, or any subject. Upload your notes for personalized, RAG-powered answers.
+        </p>
 
-      <div className="suggestion-grid" role="list" aria-label="Conversation starters">
-        {suggestions.map((s, i) => (
-          <button
-            key={i}
-            id={`suggestion-${i}`}
-            className="suggestion-card"
-            onClick={() => onSuggestion(s.text)}
-            role="listitem"
-            aria-label={`Start conversation: ${s.text}`}
-          >
-            <div className="suggestion-card-icon">{s.icon}</div>
-            <div className="suggestion-card-text">{s.text}</div>
-          </button>
-        ))}
-      </div>
+        <div className="suggestion-grid" role="list" aria-label="Conversation starters">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              id={`suggestion-${i}`}
+              className="suggestion-card"
+              onClick={() => onSuggestion(s.text)}
+              role="listitem"
+              aria-label={`Start conversation: ${s.text}`}
+            >
+              <div className="suggestion-card-icon">{s.icon}</div>
+              <div className="suggestion-card-text">{s.text}</div>
+            </button>
+          ))}
+        </div>
 
-      <button
-        type="button"
-        className="blank-chat-btn"
-        onClick={onStartBlankChat}
-      >
-        Start with an empty chat
-      </button>
+        <button
+          type="button"
+          className="blank-chat-btn"
+          onClick={onStartBlankChat}
+        >
+          Start with an empty chat
+        </button>
 
-      <div style={{ marginTop: 32, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-        <span className="chip chip-purple">📚 Upload notes for RAG</span>
-        <span className="chip chip-teal">🖼️ Paste images for vision</span>
-        <span className="chip chip-green">⚡ Powered by Groq</span>
+        <div style={{ marginTop: 32, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          <span className="chip chip-purple">📚 Upload notes for RAG</span>
+          <span className="chip chip-teal">🖼️ Paste images for vision</span>
+          <span className="chip chip-green">⚡ Powered by Groq</span>
+        </div>
       </div>
     </div>
   );

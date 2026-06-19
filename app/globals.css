@@ -958,12 +958,15 @@ body {
 
 /* ─── Welcome Screen ─── */
 .welcome-screen {
+  /* flex: 1 + min-height: 0 + overflow-y: auto turns this into a proper
+     scroll container that sits inside the flex-column .chat-area */
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 40px;
+  padding: 24px clamp(16px, 4vw, 40px) 32px;
   text-align: center;
 }
 
