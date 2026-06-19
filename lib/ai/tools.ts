@@ -321,21 +321,46 @@ export const calculateTool = tool({
       .describe("Whether to show step-by-step solution"),
   }),
   execute: async ({ expression, showSteps }) => {
+    // ── Fast path: try the deterministic parser first ──────────────────────
     try {
       const result = evaluateExpression(expression);
+      if (typeof result === "number" && Number.isFinite(result)) {
+        const formatted = Number.isInteger(result)
+          ? result.toString()
+          : result.toPrecision(10).replace(/\.?0+$/, "");
+        return { expression, result: formatted, showSteps: showSteps ?? false };
+      }
+    } catch {
+      // fall through to LLM fallback
+    }
 
-      if (typeof result !== "number" || isNaN(result)) {
-        return { error: "Could not evaluate expression", expression };
+    // ── LLM fallback: handles algebra, variables, word-style expressions ───
+    try {
+      const { text } = await generateText({
+        model: groq(FAST_GEN_MODEL),
+        prompt: showSteps
+          ? `Solve this step-by-step, then give the final answer on the last line starting with "Answer:"\n\nProblem: ${expression}`
+          : `Compute this mathematical expression and return ONLY the final numerical result — no explanation, no units, just the number or simplified expression.\n\nProblem: ${expression}`,
+        temperature: 0,
+      });
+
+      const answer = text.trim();
+
+      // If showSteps, extract the "Answer: ..." line for the result field
+      if (showSteps) {
+        const answerLine = answer.split("\n").reverse().find((l) =>
+          l.toLowerCase().startsWith("answer:")
+        );
+        const resultValue = answerLine
+          ? answerLine.replace(/^answer:\s*/i, "").trim()
+          : answer.split("\n").at(-1)?.trim() ?? answer;
+        return { expression, result: resultValue, steps: answer, showSteps: true };
       }
 
-      const formatted = Number.isInteger(result)
-        ? result.toString()
-        : result.toPrecision(10).replace(/\.?0+$/, "");
-
-      return { expression, result: formatted, showSteps: showSteps ?? false };
+      return { expression, result: answer, showSteps: false };
     } catch {
       return {
-        error: `Could not evaluate: ${expression}. Make sure the expression is valid.`,
+        error: `Could not evaluate: "${expression}". Try simplifying the expression.`,
         expression,
       };
     }

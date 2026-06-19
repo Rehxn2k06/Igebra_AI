@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,6 +13,15 @@ export const metadata: Metadata = {
   },
 };
 
+// viewport-fit=cover is required for env(safe-area-inset-bottom) to work on iOS Safari.
+// Without it, the bottom input bar gets clipped under the phone gesture bar.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0a0e1a",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,3 +33,4 @@ export default function RootLayout({
     </html>
   );
 }
+
