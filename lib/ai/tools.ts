@@ -35,7 +35,7 @@ const CONSTANTS: Record<string, number> = {
 const quizQuestionSchema = z.object({
   question: z.string(),
   options: z.array(z.string()).length(4),
-  correct: z.number().int().min(0).max(3),
+  correct: z.coerce.number().int().min(0).max(3),
   explanation: z.string(),
 });
 
